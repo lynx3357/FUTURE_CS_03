@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Encrypted File Manager</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        form, #file-list { margin-bottom: 20px; }
+        .file-item { margin: 5px 0; }
+        button { margin-left: 10px; }
+        progress { width: 300px; height: 20px; margin-left: 10px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <h2>Upload Encrypted File</h2>
+    <form id="upload-form">
+        <input type="file" id="file" name="file" required />
+        <button type="submit">Upload</button>
+        <span id="status"></span><br>
+        <progress id="progress" value="0" max="100" style="display:none;"></progress>
+    </form>
+
+    <h3>Uploaded Files</h3>
+    <div id="file-list"></div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const status = document.getElementById('status');
+        const progressBar = document.getElementById('progress');
+        const fileList = document.getElementById('file-list');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('file');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            progressBar.style.display = 'inline-block';
+            progressBar.value = 0;
+            status.textContent = 'Uploading...';
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload', true);
+
+            xhr.upload.onprogress = function (e) {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total) * 100;
+                    progressBar.value = percent;
+                }
+            };
+
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    status.textContent = '✅ Upload complete!';
+                    progressBar.value = 100;
+                    fileInput.value = '';
+                    loadFiles();
+                } else {
+                    status.textContent = '❌ Upload failed';
+                }
+                setTimeout(() => progressBar.style.display = 'none', 1000);
+            };
+
+            xhr.onerror = function () {
+                status.textContent = '❌ Upload error';
+                progressBar.style.display = 'none';
+            };
+
+            xhr.send(formData);
+        });
+
+        async function loadFiles() {
+            const res = await fetch('/files');
+            const files = await res.json();
+
+            fileList.innerHTML = '';
+            files.forEach(file => {
+                const div = document.createElement('div');
+                div.className = 'file-item';
+
+                const link = document.createElement('a');
+                link.href = `/download/${file}`;
+                link.textContent = file;
+                link.target = '_blank';
+
+                const del = document.createElement('button');
+                del.textContent = 'Delete';
+                del.onclick = async () => {
+                    if (confirm(`Delete ${file}?`)) {
+                        await fetch(`/delete/${file}`, { method: 'DELETE' });
+                        loadFiles();
+                    }
+                };
+
+                div.appendChild(link);
+                div.appendChild(del);
+                fileList.appendChild(div);
+            });
+        }
+
+        // Load files on page load
+        loadFiles();
+    </script>
+</body>
+</html>
